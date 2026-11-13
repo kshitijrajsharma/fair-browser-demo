@@ -51,7 +51,6 @@
   #tile-position { font-size: 13px; color: var(--muted); text-align: center; font-variant-numeric: tabular-nums; }
   .controls { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
   fieldset.choices { display: flex; margin: 0; padding: 0; border: 0; }
-  fieldset.choices[hidden] { display: none; }
   fieldset.choices legend { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .choices label { position: relative; padding: 6px 12px; margin-left: -1px; font-size: 15px; background: var(--panel); border: 1px solid var(--line-strong); cursor: pointer; }
   .choices label:first-of-type { margin-left: 0; border-radius: 6px 0 0 6px; }
@@ -97,6 +96,7 @@
   .result-actions span { font-size: 13px; color: var(--muted); }
   footer { margin: 16px auto 0; width: min(560px, 100%); font-size: 13px; color: var(--muted); }
   footer a { color: var(--muted); }
+  .nowrap { white-space: nowrap; }
   @media (max-width: 480px) {
     .card { padding: 16px; }
     #run { margin-left: 0; flex: 1; }
@@ -143,11 +143,6 @@
         <label><input type="radio" name="model" id="model-uint8" value="uint8" checked>8-bit</label>
         <label><input type="radio" name="model" id="model-float32" value="float32">32-bit</label>
       </fieldset>
-      <fieldset class="choices" id="backend-choices" hidden>
-        <legend>Backend</legend>
-        <label><input type="radio" name="backend" id="backend-wasm" value="wasm" checked>CPU</label>
-        <label><input type="radio" name="backend" id="backend-webgpu" value="webgpu">WebGPU</label>
-      </fieldset>
       <button id="run" type="button">Run</button>
     </div>
     <p class="hint" id="model-info"></p>
@@ -166,7 +161,7 @@
           <p class="device" id="device"></p>
           <div class="table-wrap">
             <table>
-              <thead><tr><th>Model</th><th>Backend</th><th>Load</th><th>First run</th><th>Runs</th><th>Building px</th></tr></thead>
+              <thead><tr><th>Model</th><th>Load</th><th>First run</th><th>Runs</th><th>Building px</th></tr></thead>
               <tbody id="detail-rows"></tbody>
             </table>
           </div>
@@ -181,11 +176,11 @@
   </div>
 
   <footer>
-    Model weights: <a href="https://github.com/facebookresearch/dinov3/blob/main/LICENSE.md">DINOv3 License</a>. Sample imagery: <a href="https://imagery.hotosm.org/browse?selected_id=00d19bd9-3222-47d8-9a6f-9f39339ac487&amp;lat=-13.9492&amp;lon=33.7376&amp;zoom=15">Mtandire</a> on OpenAerialMap, CC-BY-SA-4.0.
+    Model weights: <a href="https://github.com/facebookresearch/dinov3/blob/main/LICENSE.md">DINOv3 License</a>. Sample imagery: <a href="https://imagery.hotosm.org/browse?selected_id=00d19bd9-3222-47d8-9a6f-9f39339ac487&amp;lat=-13.9492&amp;lon=33.7376&amp;zoom=15">Mtandire</a> on OpenAerialMap, <span class="nowrap">CC-BY-SA-4.0</span>.
   </footer>
 </main>
 
-<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.1/dist/ort.webgpu.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.1/dist/ort.wasm.min.js"></script>
 <script>
 const HOT_MEAN = [0.4296737853453577, 0.4001659668453235, 0.34333372802741474];
 const HOT_STD = [0.2056069389373208, 0.16738555558380538, 0.1598986422586595];
@@ -213,6 +208,7 @@ const MODELS = {
 };
 
 ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.1/dist/";
+ort.env.wasm.proxy = true;
 
 const tileCanvas = document.getElementById("tile");
 const maskCanvas = document.getElementById("mask");
@@ -292,7 +288,7 @@ function tileTensor() {
       values[channel * plane + index] = (pixels[index * 4 + channel] / 255 - HOT_MEAN[channel]) / HOT_STD[channel];
     }
   }
-  return new ort.Tensor("float32", values, [1, 3, TILE_SIZE, TILE_SIZE]);
+  return values;
 }
 
 async function downloadModel(url, signal) {
@@ -390,7 +386,7 @@ function renderTables() {
     const result = latestResults[key];
     const download = result && (Number.isNaN(Number(result.downloadSeconds)) ? result.downloadSeconds : `${result.downloadSeconds} s`);
     summaryRows.push(tableRow([model.name, `${model.sizeMb} MB`, download, result && `${(result.averageMs / 1000).toFixed(2)} s`], key === selected));
-    detailRows.push(tableRow([model.name, result?.backend, result && (Number.isNaN(Number(result.loadSeconds)) ? result.loadSeconds : `${result.loadSeconds} s`), result && `${result.firstRunMs} ms`, result?.runs, result?.buildingPixels], key === selected));
+    detailRows.push(tableRow([model.name, result && (Number.isNaN(Number(result.loadSeconds)) ? result.loadSeconds : `${result.loadSeconds} s`), result && `${result.firstRunMs} ms`, result?.runs, result?.buildingPixels], key === selected));
   }
   document.getElementById("summary-rows").replaceChildren(...summaryRows);
   document.getElementById("detail-rows").replaceChildren(...detailRows);
@@ -400,16 +396,15 @@ function setRunning(isRunning) {
   document.body.classList.toggle("working", isRunning);
   runButton.textContent = isRunning ? "Stop" : "Run";
   runButton.classList.toggle("secondary", isRunning);
-  document.querySelectorAll('input[name="model"], input[name="backend"], #previous, #next, #imagery-form button, #imagery-input, #upload, .thumb').forEach((control) => { control.disabled = isRunning; });
+  document.querySelectorAll('input[name="model"], #previous, #next, #imagery-form button, #imagery-input, #upload, .thumb').forEach((control) => { control.disabled = isRunning; });
 }
 
 function throwIfStopped(run) {
   if (run.controller.signal.aborted) throw new RunStopped();
 }
 
-async function loadModel(modelKey, backend, run) {
-  const key = `${modelKey}|${backend}`;
-  if (loadedModel?.key === key) return { session: loadedModel.session, download: "in memory", loadSeconds: "in memory" };
+async function loadModel(modelKey, run) {
+  if (loadedModel?.key === modelKey) return { session: loadedModel.session, download: "in memory", loadSeconds: "in memory" };
   if (loadedModel) {
     await loadedModel.session.release();
     loadedModel = null;
@@ -427,8 +422,8 @@ async function loadModel(modelKey, backend, run) {
   throwIfStopped(run);
   setStatus("Loading model");
   const loadStart = performance.now();
-  const session = await ort.InferenceSession.create(bytes, { executionProviders: [backend], graphOptimizationLevel: "all" });
-  loadedModel = { key, session };
+  const session = await ort.InferenceSession.create(bytes, { executionProviders: ["wasm"], graphOptimizationLevel: "all" });
+  loadedModel = { key: modelKey, session };
   return {
     session,
     download: fromCache ? "cached" : downloadSeconds.toFixed(1),
@@ -458,15 +453,15 @@ async function withRun(task) {
 
 async function predict(run, timedRuns) {
   const modelKey = selectedModelKey();
-  const backend = document.querySelector('input[name="backend"]:checked').value;
-  const { session, download, loadSeconds } = await loadModel(modelKey, backend, run);
+  const { session, download, loadSeconds } = await loadModel(modelKey, run);
   throwIfStopped(run);
 
   const tileName = currentTileName;
-  const feeds = { [session.inputNames[0]]: tileTensor() };
+  const pixels = tileTensor();
+  const feeds = () => ({ [session.inputNames[0]]: new ort.Tensor("float32", pixels.slice(), [1, 3, TILE_SIZE, TILE_SIZE]) });
   setStatus("Finding buildings");
   let started = performance.now();
-  let outputs = await session.run(feeds);
+  let outputs = await session.run(feeds());
   const firstRunMs = performance.now() - started;
   throwIfStopped(run);
 
@@ -475,13 +470,12 @@ async function predict(run, timedRuns) {
     throwIfStopped(run);
     setStatus(`Timing, run ${attempt} of ${timedRuns}`);
     started = performance.now();
-    outputs = await session.run(feeds);
+    outputs = await session.run(feeds());
     timings.push(performance.now() - started);
   }
   const buildingPixels = drawMask(outputs[session.outputNames[0]].data);
   const averageMs = timings.length ? timings.reduce((sum, value) => sum + value, 0) / timings.length : firstRunMs;
   latestResults[modelKey] = {
-    backend,
     downloadSeconds: download,
     loadSeconds,
     runs: timings.length || 1,
@@ -585,28 +579,20 @@ function loadImagery(event) {
   });
 }
 
-async function describeDevice() {
+function describeDevice() {
   const parts = [
     navigator.userAgent,
     `logical cores ${navigator.hardwareConcurrency ?? "unknown"}`,
     `device memory ${navigator.deviceMemory ? navigator.deviceMemory + " GB (rounded by browser)" : "not reported"}`,
     `cross-origin isolated ${self.crossOriginIsolated ? "yes (multi-threaded WASM)" : "no (single-threaded WASM)"}`,
   ];
-  const adapter = navigator.gpu ? await navigator.gpu.requestAdapter() : null;
-  if (adapter) {
-    const info = adapter.info || {};
-    parts.push(`GPU ${[info.vendor, info.architecture, info.description].filter(Boolean).join(" ") || "unnamed"}`);
-    document.getElementById("backend-choices").hidden = false;
-  } else {
-    parts.push(navigator.gpu ? "WebGPU no adapter" : "WebGPU unavailable");
-  }
   deviceSummary = parts.join(" | ");
   document.getElementById("device").textContent = deviceSummary;
 }
 
 function copyResults() {
-  const header = "model\tbackend\tsize_mb\tdownload_s\tload_s\tfirst_run_ms\tavg_ms\truns\tbuilding_px\ttile";
-  const lines = Object.entries(latestResults).map(([key, row]) => [MODELS[key].name, row.backend, MODELS[key].sizeMb, row.downloadSeconds, row.loadSeconds, row.firstRunMs, row.averageMs, row.runs, row.buildingPixels, row.tile].join("\t"));
+  const header = "model\tsize_mb\tdownload_s\tload_s\tfirst_run_ms\tavg_ms\truns\tbuilding_px\ttile";
+  const lines = Object.entries(latestResults).map(([key, row]) => [MODELS[key].name, MODELS[key].sizeMb, row.downloadSeconds, row.loadSeconds, row.firstRunMs, row.averageMs, row.runs, row.buildingPixels, row.tile].join("\t"));
   const copyStatus = document.getElementById("copy-status");
   navigator.clipboard.writeText([deviceSummary, header, ...lines].join("\n")).then(
     () => { copyStatus.textContent = "Copied"; },

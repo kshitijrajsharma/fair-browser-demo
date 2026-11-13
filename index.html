@@ -1,0 +1,631 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>fAIr Buildings in the Browser</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter:400,500,600%7CJetBrains+Mono:400&amp;display=fallback">
+<link rel="icon" href="fair-logo.svg" type="image/svg+xml">
+<style>
+  :root {
+    --ink: #16181d;
+    --ink-hover: #3a3e48;
+    --on-ink: #ffffff;
+    --muted: #646a77;
+    --line: #e6e7eb;
+    --line-strong: #d2d5dc;
+    --ground: #f6f6f7;
+    --panel: #ffffff;
+    --hover: #f3f4f6;
+    --error: #b42318;
+    --text: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.5 var(--text); color: var(--ink); background: var(--ground); }
+  header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 4px 24px; padding: 12px 16px; background: var(--panel); border-bottom: 1px solid var(--line); }
+  h1 { margin: 0; display: flex; align-items: center; gap: 10px; font-size: 18px; }
+  h1 a { display: flex; }
+  header nav { display: flex; gap: 16px; font-size: 14px; }
+  header nav a { color: var(--muted); text-decoration: none; }
+  header nav a:hover { color: var(--ink); }
+  main { padding: 24px 16px 40px; }
+  .card { margin: 0 auto; width: min(560px, 100%); display: flex; flex-direction: column; gap: 16px; padding: 24px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 1px 2px rgb(22 24 29 / 0.04), 0 12px 32px rgb(22 24 29 / 0.08); }
+  .intro { margin: 0; color: var(--muted); }
+  .stage { position: relative; width: 100%; aspect-ratio: 1; background: var(--line); border-radius: 6px; overflow: hidden; }
+  .stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .tiles { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .tiles button.thumb { padding: 0; width: 48px; height: 48px; border: 2px solid transparent; border-radius: 6px; background: none; overflow: hidden; cursor: pointer; }
+  .tiles button.thumb[aria-pressed="true"] { border-color: var(--ink); }
+  .tiles button.thumb img { width: 100%; height: 100%; display: block; }
+  .upload { margin-left: auto; font-size: 14px; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+  .upload:hover { color: var(--ink); }
+  .upload:focus-within { outline: 2px solid var(--ink); outline-offset: 2px; }
+  .upload input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+  .imagery { display: flex; gap: 8px; }
+  .imagery input { flex: 1; min-width: 0; font: inherit; font-size: 14px; padding: 6px 10px; color: var(--ink); background: var(--panel); border: 1px solid var(--line-strong); border-radius: 6px; }
+  .imagery input:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+  .navigator { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .navigator[hidden], .tiles[hidden] { display: none; }
+  #tile-position { font-size: 13px; color: var(--muted); text-align: center; font-variant-numeric: tabular-nums; }
+  .controls { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  fieldset.choices { display: flex; margin: 0; padding: 0; border: 0; }
+  fieldset.choices[hidden] { display: none; }
+  fieldset.choices legend { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .choices label { position: relative; padding: 6px 12px; margin-left: -1px; font-size: 15px; background: var(--panel); border: 1px solid var(--line-strong); cursor: pointer; }
+  .choices label:first-of-type { margin-left: 0; border-radius: 6px 0 0 6px; }
+  .choices label:last-of-type { border-radius: 0 6px 6px 0; }
+  .choices label:hover { background: var(--hover); }
+  .choices label:has(input:checked) { color: var(--on-ink); background: var(--ink); border-color: var(--ink); }
+  .choices label:has(input:focus-visible) { outline: 2px solid var(--ink); outline-offset: 2px; }
+  .choices label:has(input:disabled) { opacity: 0.5; cursor: not-allowed; }
+  .choices input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; }
+  button { font: inherit; padding: 6px 14px; border: 1px solid var(--ink); border-radius: 6px; background: var(--ink); color: var(--on-ink); font-weight: 500; cursor: pointer; }
+  button:where(:hover:not(:disabled)) { background: var(--ink-hover); border-color: var(--ink-hover); }
+  button.secondary { background: var(--panel); color: var(--ink); border-color: var(--line-strong); }
+  button.secondary:where(:hover:not(:disabled)) { background: var(--hover); }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  button.link { margin-left: auto; padding: 0; border: 0; background: none; color: var(--muted); font-size: 13px; font-weight: 400; text-decoration: underline; text-underline-offset: 3px; }
+  button.link:where(:hover:not(:disabled)) { background: none; color: var(--ink); }
+  button:focus-visible, summary:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+  #run { margin-left: auto; }
+  #status { margin: 0; font-size: 14px; color: var(--muted); }
+  #status:empty { display: none; }
+  #status.error { color: var(--error); }
+  body.working #status::before { content: ""; display: inline-block; width: 12px; height: 12px; margin-right: 6px; vertical-align: -2px; border: 2px solid var(--line-strong); border-top-color: var(--ink); border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { body.working #status::before { animation: none; } }
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { padding: 6px 8px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--line); }
+  th:first-child, td:first-child { text-align: left; padding-left: 0; }
+  th:last-child, td:last-child { padding-right: 0; }
+  th { font-weight: 500; font-size: 13px; color: var(--muted); }
+  td { font-variant-numeric: tabular-nums; }
+  .hint { margin: -8px 0 0; font-size: 13px; color: var(--muted); }
+  tr.selected td { font-weight: 600; }
+  td.empty { color: var(--muted); font-weight: 400; }
+  .results { display: flex; flex-direction: column; gap: 12px; }
+  details > summary { display: flex; align-items: center; gap: 8px; list-style: none; cursor: pointer; font-size: 14px; color: var(--muted); }
+  details > summary::-webkit-details-marker { display: none; }
+  details > summary::after { content: ""; width: 7px; height: 7px; margin-bottom: 3px; border-right: 1.5px solid var(--muted); border-bottom: 1.5px solid var(--muted); transform: rotate(45deg); transition: transform 0.15s; }
+  details[open] > summary::after { transform: rotate(225deg); margin-bottom: -3px; }
+  details > div { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+  .device { margin: 0; font: 12px/1.5 var(--mono); color: var(--muted); overflow-wrap: anywhere; }
+  .result-actions { display: flex; align-items: center; gap: 10px; }
+  .result-actions span { font-size: 13px; color: var(--muted); }
+  footer { margin: 16px auto 0; width: min(560px, 100%); font-size: 13px; color: var(--muted); }
+  footer a { color: var(--muted); }
+  @media (max-width: 480px) {
+    .card { padding: 16px; }
+    #run { margin-left: 0; flex: 1; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1><a href="https://fair.hotosm.org"><img src="fair-logo.svg" alt="fAIr" width="24" height="24"></a>Buildings in the browser</h1>
+  <nav>
+    <a href="https://huggingface.co/kshitijrajsharma/dinov3-hot-buildings">Model</a>
+    <a href="https://github.com/hotosm/fAIr-models/tree/develop/models/dinov3s_buildings">Code</a>
+  </nav>
+</header>
+
+<main>
+  <div class="card">
+    <p class="intro">Runs the fAIr building model on this device. Your images are not uploaded; the prediction stays in the browser.</p>
+
+    <form class="imagery" id="imagery-form">
+      <input id="imagery-input" type="text" placeholder="imagery.hotosm.org link or image ID" aria-label="Imagery link or ID">
+      <button class="secondary" type="submit">Load</button>
+    </form>
+    <p class="hint" id="imagery-info"></p>
+
+    <div class="stage">
+      <canvas id="tile" width="256" height="256" role="img" aria-label="Input tile"></canvas>
+      <canvas id="mask" width="256" height="256" role="img" aria-label="Predicted buildings"></canvas>
+    </div>
+
+    <div class="tiles" id="tiles">
+      <label class="upload">Use your own image<input type="file" id="upload" accept="image/*"></label>
+    </div>
+
+    <div class="navigator" id="navigator" hidden>
+      <button class="secondary" id="previous" type="button">Previous</button>
+      <span id="tile-position"></span>
+      <button class="secondary" id="next" type="button">Next</button>
+    </div>
+
+    <div class="controls">
+      <fieldset class="choices">
+        <legend>Model</legend>
+        <label><input type="radio" name="model" id="model-uint8" value="uint8" checked>8-bit</label>
+        <label><input type="radio" name="model" id="model-float32" value="float32">32-bit</label>
+      </fieldset>
+      <fieldset class="choices" id="backend-choices" hidden>
+        <legend>Backend</legend>
+        <label><input type="radio" name="backend" id="backend-wasm" value="wasm" checked>CPU</label>
+        <label><input type="radio" name="backend" id="backend-webgpu" value="webgpu">WebGPU</label>
+      </fieldset>
+      <button id="run" type="button">Run</button>
+    </div>
+    <p class="hint" id="model-info"></p>
+    <p id="status" role="status"></p>
+
+    <div class="results">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Model</th><th>Size</th><th>Download</th><th>Per tile</th></tr></thead>
+          <tbody id="summary-rows"></tbody>
+        </table>
+      </div>
+      <details>
+        <summary>Details</summary>
+        <div>
+          <p class="device" id="device"></p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Model</th><th>Backend</th><th>Load</th><th>First run</th><th>Runs</th><th>Building px</th></tr></thead>
+              <tbody id="detail-rows"></tbody>
+            </table>
+          </div>
+        </div>
+      </details>
+      <div class="result-actions">
+        <button class="secondary" id="copy" type="button">Copy results</button>
+        <span id="copy-status" role="status"></span>
+        <button class="link" id="clear-cache" type="button">Clear downloaded models</button>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    Model weights: <a href="https://github.com/facebookresearch/dinov3/blob/main/LICENSE.md">DINOv3 License</a>. Sample imagery: <a href="https://imagery.hotosm.org/browse?selected_id=00d19bd9-3222-47d8-9a6f-9f39339ac487&amp;lat=-13.9492&amp;lon=33.7376&amp;zoom=15">Mtandire</a> on OpenAerialMap, CC-BY-SA-4.0.
+  </footer>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.1/dist/ort.webgpu.min.js"></script>
+<script>
+const HOT_MEAN = [0.4296737853453577, 0.4001659668453235, 0.34333372802741474];
+const HOT_STD = [0.2056069389373208, 0.16738555558380538, 0.1598986422586595];
+const TILE_SIZE = 256;
+const TIMED_RUNS = 5;
+const CONFIDENCE_THRESHOLD = 0.5;
+const MASK_RGBA = [255, 221, 0, 150];
+const MODEL_CACHE = "fair-buildings-models-v1";
+const STAC_ITEMS = "https://api.imagery.hotosm.org/stac/collections/openaerialmap/items/";
+const RASTER_API = "https://api.imagery.hotosm.org/raster/collections/";
+const BROWSE_URL = "https://imagery.hotosm.org/browse";
+const TILE_ZOOM = 19;
+const MAX_SKIPPED_TILES = 100;
+const IMAGE_ID_PATTERN = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+const SAMPLE_TILES = [
+  "samples/mtandire_19_311265_282665.png",
+  "samples/mtandire_19_311264_282664.png",
+  "samples/mtandire_19_311266_282666.png",
+];
+const modelBase = new URLSearchParams(location.search).get("models")
+  || "https://huggingface.co/kshitijrajsharma/dinov3-hot-buildings/resolve/3cb3e1299b0f48a5c2c6e484f3f18dfd90542f37/";
+const MODELS = {
+  uint8: { name: "dinov3s 8-bit", file: "dinov3s_buildings_uint8.onnx", sizeMb: "76.6" },
+  float32: { name: "dinov3s 32-bit", file: "dinov3s_buildings.onnx", sizeMb: "219.6" },
+};
+
+ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.1/dist/";
+
+const tileCanvas = document.getElementById("tile");
+const maskCanvas = document.getElementById("mask");
+const statusLine = document.getElementById("status");
+const runButton = document.getElementById("run");
+const latestResults = {};
+const savedModels = new Set();
+let currentTileName = SAMPLE_TILES[0].split("/").pop();
+let deviceSummary = "";
+let activeRun = null;
+let loadedModel = null;
+let imagery = null;
+let storageFull = false;
+
+class RunStopped extends Error {}
+
+function selectedModelKey() {
+  return document.querySelector('input[name="model"]:checked').value;
+}
+
+function setStatus(text, isError = false) {
+  statusLine.textContent = text;
+  statusLine.classList.toggle("error", isError);
+}
+
+function loadImage(source) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error(`Could not load image ${source}`));
+    image.src = source;
+  });
+}
+
+async function showTile(source, name) {
+  const image = await loadImage(source);
+  const context = tileCanvas.getContext("2d");
+  context.clearRect(0, 0, TILE_SIZE, TILE_SIZE);
+  context.drawImage(image, 0, 0, TILE_SIZE, TILE_SIZE);
+  maskCanvas.getContext("2d").clearRect(0, 0, TILE_SIZE, TILE_SIZE);
+  currentTileName = name;
+}
+
+function renderThumbnails() {
+  const container = document.getElementById("tiles");
+  const upload = container.querySelector(".upload");
+  SAMPLE_TILES.forEach((source, index) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "thumb";
+    button.setAttribute("aria-pressed", String(index === 0));
+    button.setAttribute("aria-label", `Sample tile ${index + 1}`);
+    button.append(Object.assign(document.createElement("img"), { src: source, alt: "" }));
+    button.addEventListener("click", async () => {
+      container.querySelectorAll(".thumb").forEach((other) => other.setAttribute("aria-pressed", "false"));
+      button.setAttribute("aria-pressed", "true");
+      await showTile(source, source.split("/").pop());
+    });
+    container.insertBefore(button, upload);
+  });
+  document.getElementById("upload").addEventListener("change", async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    container.querySelectorAll(".thumb").forEach((other) => other.setAttribute("aria-pressed", "false"));
+    const url = URL.createObjectURL(file);
+    await showTile(url, file.name);
+    URL.revokeObjectURL(url);
+  });
+}
+
+function tileTensor() {
+  const pixels = tileCanvas.getContext("2d").getImageData(0, 0, TILE_SIZE, TILE_SIZE).data;
+  const plane = TILE_SIZE * TILE_SIZE;
+  const values = new Float32Array(3 * plane);
+  for (let index = 0; index < plane; index++) {
+    for (let channel = 0; channel < 3; channel++) {
+      values[channel * plane + index] = (pixels[index * 4 + channel] / 255 - HOT_MEAN[channel]) / HOT_STD[channel];
+    }
+  }
+  return new ort.Tensor("float32", values, [1, 3, TILE_SIZE, TILE_SIZE]);
+}
+
+async function downloadModel(url, signal) {
+  const response = await fetch(url, { signal });
+  if (!response.ok) throw new Error(`Model download failed: HTTP ${response.status} for ${url}`);
+  const total = Number(response.headers.get("content-length")) || 0;
+  const reader = response.body.getReader();
+  const chunks = [];
+  let received = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    received += value.length;
+    setStatus(`Downloading model, ${(received / 1e6).toFixed(0)}${total ? ` of ${(total / 1e6).toFixed(0)}` : ""} MB`);
+  }
+  const bytes = new Uint8Array(received);
+  let offset = 0;
+  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
+  return bytes;
+}
+
+async function cachedModel(url) {
+  if (!self.caches) return null;
+  const response = await (await caches.open(MODEL_CACHE)).match(url);
+  return response ? new Uint8Array(await response.arrayBuffer()) : null;
+}
+
+async function storeModel(url, bytes) {
+  if (!self.caches) return;
+  const cache = await caches.open(MODEL_CACHE);
+  try {
+    await cache.put(url, new Response(bytes, { headers: { "content-type": "application/octet-stream" } }));
+  } catch (error) {
+    if (error.name !== "QuotaExceededError") throw error;
+    storageFull = true;
+  }
+}
+
+async function refreshSavedModels() {
+  savedModels.clear();
+  if (self.caches) {
+    const cache = await caches.open(MODEL_CACHE);
+    for (const [key, model] of Object.entries(MODELS)) {
+      if (await cache.match(modelBase + model.file)) savedModels.add(key);
+    }
+  }
+  renderModelInfo();
+}
+
+function renderModelInfo() {
+  const key = selectedModelKey();
+  const model = MODELS[key];
+  const storage = savedModels.has(key) ? "saved in this browser" : storageFull ? "browser storage is full, downloads on every run" : "downloads on first run";
+  document.getElementById("model-info").textContent = `${model.name}, ${model.sizeMb} MB, ${storage}`;
+}
+
+async function clearModels() {
+  const cleared = self.caches ? await caches.delete(MODEL_CACHE) : false;
+  document.getElementById("copy-status").textContent = cleared ? "Downloaded models cleared" : "No downloaded models";
+  await refreshSavedModels();
+}
+
+function drawMask(logits) {
+  const plane = TILE_SIZE * TILE_SIZE;
+  const context = maskCanvas.getContext("2d");
+  const overlay = context.createImageData(TILE_SIZE, TILE_SIZE);
+  let buildingPixels = 0;
+  for (let index = 0; index < plane; index++) {
+    if (1 / (1 + Math.exp(-logits[index])) >= CONFIDENCE_THRESHOLD) {
+      buildingPixels++;
+      overlay.data.set(MASK_RGBA, index * 4);
+    }
+  }
+  context.putImageData(overlay, 0, 0);
+  return buildingPixels;
+}
+
+function tableRow(cells, isSelected) {
+  const row = document.createElement("tr");
+  row.classList.toggle("selected", isSelected);
+  cells.forEach((value) => {
+    const cell = Object.assign(document.createElement("td"), { textContent: value ?? "not run" });
+    cell.classList.toggle("empty", value === undefined);
+    row.append(cell);
+  });
+  return row;
+}
+
+function renderTables() {
+  const selected = selectedModelKey();
+  const summaryRows = [];
+  const detailRows = [];
+  for (const [key, model] of Object.entries(MODELS)) {
+    const result = latestResults[key];
+    const download = result && (Number.isNaN(Number(result.downloadSeconds)) ? result.downloadSeconds : `${result.downloadSeconds} s`);
+    summaryRows.push(tableRow([model.name, `${model.sizeMb} MB`, download, result && `${(result.averageMs / 1000).toFixed(2)} s`], key === selected));
+    detailRows.push(tableRow([model.name, result?.backend, result && (Number.isNaN(Number(result.loadSeconds)) ? result.loadSeconds : `${result.loadSeconds} s`), result && `${result.firstRunMs} ms`, result?.runs, result?.buildingPixels], key === selected));
+  }
+  document.getElementById("summary-rows").replaceChildren(...summaryRows);
+  document.getElementById("detail-rows").replaceChildren(...detailRows);
+}
+
+function setRunning(isRunning) {
+  document.body.classList.toggle("working", isRunning);
+  runButton.textContent = isRunning ? "Stop" : "Run";
+  runButton.classList.toggle("secondary", isRunning);
+  document.querySelectorAll('input[name="model"], input[name="backend"], #previous, #next, #imagery-form button, #imagery-input, #upload, .thumb').forEach((control) => { control.disabled = isRunning; });
+}
+
+function throwIfStopped(run) {
+  if (run.controller.signal.aborted) throw new RunStopped();
+}
+
+async function loadModel(modelKey, backend, run) {
+  const key = `${modelKey}|${backend}`;
+  if (loadedModel?.key === key) return { session: loadedModel.session, download: "in memory", loadSeconds: "in memory" };
+  if (loadedModel) {
+    await loadedModel.session.release();
+    loadedModel = null;
+  }
+  const url = modelBase + MODELS[modelKey].file;
+  const downloadStart = performance.now();
+  let bytes = await cachedModel(url);
+  const fromCache = bytes !== null;
+  if (!fromCache) {
+    bytes = await downloadModel(url, run.controller.signal);
+    await storeModel(url, bytes);
+    await refreshSavedModels();
+  }
+  const downloadSeconds = (performance.now() - downloadStart) / 1000;
+  throwIfStopped(run);
+  setStatus("Loading model");
+  const loadStart = performance.now();
+  const session = await ort.InferenceSession.create(bytes, { executionProviders: [backend], graphOptimizationLevel: "all" });
+  loadedModel = { key, session };
+  return {
+    session,
+    download: fromCache ? "cached" : downloadSeconds.toFixed(1),
+    loadSeconds: ((performance.now() - loadStart) / 1000).toFixed(1),
+  };
+}
+
+async function withRun(task) {
+  if (activeRun) return;
+  const run = { controller: new AbortController() };
+  activeRun = run;
+  setRunning(true);
+  try {
+    await task(run);
+  } catch (error) {
+    if (error instanceof RunStopped || error.name === "AbortError") {
+      setStatus("Stopped");
+      return;
+    }
+    setStatus(error.message || String(error), true);
+    throw error;
+  } finally {
+    activeRun = null;
+    setRunning(false);
+  }
+}
+
+async function predict(run, timedRuns) {
+  const modelKey = selectedModelKey();
+  const backend = document.querySelector('input[name="backend"]:checked').value;
+  const { session, download, loadSeconds } = await loadModel(modelKey, backend, run);
+  throwIfStopped(run);
+
+  const tileName = currentTileName;
+  const feeds = { [session.inputNames[0]]: tileTensor() };
+  setStatus("Finding buildings");
+  let started = performance.now();
+  let outputs = await session.run(feeds);
+  const firstRunMs = performance.now() - started;
+  throwIfStopped(run);
+
+  const timings = [];
+  for (let attempt = 1; attempt <= timedRuns; attempt++) {
+    throwIfStopped(run);
+    setStatus(`Timing, run ${attempt} of ${timedRuns}`);
+    started = performance.now();
+    outputs = await session.run(feeds);
+    timings.push(performance.now() - started);
+  }
+  const buildingPixels = drawMask(outputs[session.outputNames[0]].data);
+  const averageMs = timings.length ? timings.reduce((sum, value) => sum + value, 0) / timings.length : firstRunMs;
+  latestResults[modelKey] = {
+    backend,
+    downloadSeconds: download,
+    loadSeconds,
+    runs: timings.length || 1,
+    firstRunMs: firstRunMs.toFixed(0),
+    averageMs: averageMs.toFixed(0),
+    buildingPixels,
+    tile: tileName,
+  };
+  renderTables();
+  setStatus(`Done, ${(averageMs / 1000).toFixed(2)} s per tile`);
+}
+
+function stopRun() {
+  activeRun.controller.abort();
+  setStatus("Stopping after the current step");
+}
+
+function tileForLonLat(lon, lat) {
+  const scale = 2 ** TILE_ZOOM;
+  const latRadians = (lat * Math.PI) / 180;
+  return {
+    x: Math.floor(((lon + 180) / 360) * scale),
+    y: Math.floor(((1 - Math.log(Math.tan(latRadians) + 1 / Math.cos(latRadians)) / Math.PI) / 2) * scale),
+  };
+}
+
+async function fetchImageryItem(text, signal) {
+  const input = text.trim();
+  const isStacItemUrl = /^https?:\/\//.test(input) && input.includes("/stac/") && input.includes("/items/");
+  const imageId = input.match(IMAGE_ID_PATTERN)?.[0];
+  if (!isStacItemUrl && !imageId) throw new Error("Paste an imagery.hotosm.org link, an OAM image ID or a STAC item URL");
+  const response = await fetch(isStacItemUrl ? input : STAC_ITEMS + imageId, { signal });
+  if (!response.ok) throw new Error(`Imagery lookup failed: HTTP ${response.status}`);
+  const item = await response.json();
+  if (!item.assets?.visual) throw new Error(`Image ${item.id} has no visual asset to tile`);
+  return item;
+}
+
+function imageryFromItem(item) {
+  const [west, south, east, north] = item.bbox;
+  const topLeft = tileForLonLat(west, north);
+  const bottomRight = tileForLonLat(east, south);
+  const centre = tileForLonLat((west + east) / 2, (south + north) / 2);
+  const columns = bottomRight.x - topLeft.x + 1;
+  return {
+    id: item.id,
+    tileUrl: `${RASTER_API}${item.collection}/items/${item.id}/tiles/WebMercatorQuad/${TILE_ZOOM}/{x}/{y}.png?assets=visual&tilesize=256`,
+    minX: topLeft.x,
+    minY: topLeft.y,
+    columns,
+    total: columns * (bottomRight.y - topLeft.y + 1),
+    index: (centre.y - topLeft.y) * columns + (centre.x - topLeft.x),
+  };
+}
+
+function tileAt(index) {
+  return { x: imagery.minX + (index % imagery.columns), y: imagery.minY + Math.floor(index / imagery.columns) };
+}
+
+async function showImageryTile(step, run) {
+  for (let skipped = 0, index = imagery.index + step; skipped <= MAX_SKIPPED_TILES; skipped++, index += step || 1) {
+    if (index < 0 || index >= imagery.total) {
+      setStatus("No more imagery in this direction");
+      return false;
+    }
+    throwIfStopped(run);
+    const { x, y } = tileAt(index);
+    setStatus(skipped ? `Finding imagery, skipped ${skipped} empty tiles` : "Loading tile");
+    const response = await fetch(imagery.tileUrl.replace("{x}", x).replace("{y}", y), { signal: run.controller.signal });
+    if (response.status === 404) continue;
+    if (!response.ok) throw new Error(`Tile ${TILE_ZOOM}/${x}/${y} failed: HTTP ${response.status}`);
+    const url = URL.createObjectURL(await response.blob());
+    await showTile(url, `${TILE_ZOOM}/${x}/${y}`);
+    URL.revokeObjectURL(url);
+    imagery.index = index;
+    document.getElementById("tile-position").textContent = `Tile ${index + 1} of ${imagery.total}, ${TILE_ZOOM}/${x}/${y}`;
+    return true;
+  }
+  setStatus(`No imagery in the next ${MAX_SKIPPED_TILES} tiles`);
+  return false;
+}
+
+async function stepImagery(step, run) {
+  if (await showImageryTile(step, run)) await predict(run, 0);
+}
+
+function loadImagery(event) {
+  event.preventDefault();
+  return withRun(async (run) => {
+    setStatus("Looking up imagery");
+    const item = await fetchImageryItem(document.getElementById("imagery-input").value, run.controller.signal);
+    imagery = imageryFromItem(item);
+    const browseLink = Object.assign(document.createElement("a"), {
+      href: `${BROWSE_URL}?selected_id=${encodeURIComponent(item.id)}`,
+      textContent: item.properties.title || item.id,
+    });
+    document.getElementById("imagery-info").replaceChildren(browseLink, `, ${item.properties.license || "licence not stated"}`);
+    document.getElementById("tiles").hidden = true;
+    document.getElementById("navigator").hidden = false;
+    await stepImagery(0, run);
+  });
+}
+
+async function describeDevice() {
+  const parts = [
+    navigator.userAgent,
+    `logical cores ${navigator.hardwareConcurrency ?? "unknown"}`,
+    `device memory ${navigator.deviceMemory ? navigator.deviceMemory + " GB (rounded by browser)" : "not reported"}`,
+    `cross-origin isolated ${self.crossOriginIsolated ? "yes (multi-threaded WASM)" : "no (single-threaded WASM)"}`,
+  ];
+  const adapter = navigator.gpu ? await navigator.gpu.requestAdapter() : null;
+  if (adapter) {
+    const info = adapter.info || {};
+    parts.push(`GPU ${[info.vendor, info.architecture, info.description].filter(Boolean).join(" ") || "unnamed"}`);
+    document.getElementById("backend-choices").hidden = false;
+  } else {
+    parts.push(navigator.gpu ? "WebGPU no adapter" : "WebGPU unavailable");
+  }
+  deviceSummary = parts.join(" | ");
+  document.getElementById("device").textContent = deviceSummary;
+}
+
+function copyResults() {
+  const header = "model\tbackend\tsize_mb\tdownload_s\tload_s\tfirst_run_ms\tavg_ms\truns\tbuilding_px\ttile";
+  const lines = Object.entries(latestResults).map(([key, row]) => [MODELS[key].name, row.backend, MODELS[key].sizeMb, row.downloadSeconds, row.loadSeconds, row.firstRunMs, row.averageMs, row.runs, row.buildingPixels, row.tile].join("\t"));
+  const copyStatus = document.getElementById("copy-status");
+  navigator.clipboard.writeText([deviceSummary, header, ...lines].join("\n")).then(
+    () => { copyStatus.textContent = "Copied"; },
+    (error) => { copyStatus.textContent = `Copy failed: ${error.message}`; },
+  );
+}
+
+runButton.addEventListener("click", () => (activeRun ? stopRun() : withRun((run) => predict(run, TIMED_RUNS))));
+document.getElementById("imagery-form").addEventListener("submit", loadImagery);
+document.getElementById("previous").addEventListener("click", () => withRun((run) => stepImagery(-1, run)));
+document.getElementById("next").addEventListener("click", () => withRun((run) => stepImagery(1, run)));
+document.querySelectorAll('input[name="model"]').forEach((input) => input.addEventListener("change", () => { renderModelInfo(); renderTables(); }));
+document.getElementById("copy").addEventListener("click", copyResults);
+document.getElementById("clear-cache").addEventListener("click", clearModels);
+renderThumbnails();
+renderTables();
+showTile(SAMPLE_TILES[0], currentTileName);
+describeDevice();
+refreshSavedModels();
+</script>
+</body>
+</html>

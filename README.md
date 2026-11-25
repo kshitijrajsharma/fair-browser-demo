@@ -40,3 +40,6 @@ Serve the folder with `python3 -m http.server` and open `/?models=./models/` to 
 | Model weights | [DINOv3 License](https://github.com/facebookresearch/dinov3/blob/main/LICENSE.md), per the fAIr-models [STAC item](https://github.com/hotosm/fAIr-models/blob/develop/models/dinov3s_buildings/stac-item.json) |
 | fAIr-models code | [AGPL-3.0](https://github.com/hotosm/fAIr-models/blob/develop/LICENSE) |
 | `samples/` tiles | CC-BY-SA-4.0, from [Mtandire, corrected 2026-10-03](https://imagery.hotosm.org/browse?selected_id=00d19bd9-3222-47d8-9a6f-9f39339ac487&lat=-13.9492&lon=33.7376&zoom=15) on OpenAerialMap |
+
+
+slide : https://docs.google.com/presentation/d/15pnOwhdifOyr6wdaraJqjxzzbT89gHjwRca-6LCZmZw/edit?usp=sharing
